@@ -1,9 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { sign, verify } from "jsonwebtoken"
+
 import { cookies } from "next/headers"
-import { cookies } from "next/headers"
-import User from "@/models/user"
+import User from "../lib/models/user.model"
+
 import dbConnect from "@/lib/mongoose"
+import { NextRequest } from "next/server"
 
 //This is the secret key used to sign and verify JWTs.//
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
@@ -19,7 +21,7 @@ export interface UserJwtPayload {
 
 // This function generates a JWT for a given user. It takes a User object as an argument and returns a signed JWT string. //
 export function generateToken(payload:UserJwtPayload){
-  return sign(payload,JWT_SECRET,{expires:"7d"})
+  return sign(payload,JWT_SECRET,{expiresIn:"7d"})
 }
 
 // This function verifies a JWT and returns the decoded payload. It takes a JWT string as an argument and returns the decoded payload or null if verification fails. //
@@ -43,8 +45,8 @@ export function verifyToken(token:string){
 // sameSite: Prevents CSRF attacks.
 
 //  //
-export function setAuthCookie(token:string){
-cookies().set({
+export async function setAuthCookie(token:string){
+  (await cookies()).set({
   name: "auth_token",
   value: token,
   httpOnly: true,
@@ -56,26 +58,26 @@ cookies().set({
 }
 
 // Reads the value of the auth_token cookie//
-export function getAuthCookie() {
-  return cookies().get("auth_token")?.value
+export async function getAuthCookie() {
+  return (await cookies()).get("auth_token")?.value
 }
 
 // Deletes the auth_token cookie//
-export function removeAuthCookie() {
-  cookies().delete("auth_token")
+export async function removeAuthCookie() {
+  (await cookies()).delete("auth_token")
 }
 
 // This function retrieves the currently logged-in user based on the auth_token cookie.
 // It connects to the database, verifies the token, and fetches the user details from the database. It returns the user object or null if not found.
 
-export async function getCurrentUser(){
+export async function getCurrentUser(req?: NextRequest){
   try {
-    const token = req ? req.cookies.get("auth_token")?.value : getAuthCookie()
+    const token = req ? req.cookies.get("auth_token")?.value : await getAuthCookie()
     if (!token) return null
     const decoded = verifyToken(token)
     if (!decoded) return null
     await dbConnect()
-    const user = await User.findById(decoded.id).select("-password")
+    const user = await User.findById(decoded.id).select("-password") as { _id: string; name: string; email: string; role: string } | null
     if (!user) return null
     return{
       id: user._id.toString(),
